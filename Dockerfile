@@ -19,8 +19,8 @@ COPY . /var/www
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Set proper permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html
+RUN chown -R www-data:www-data /var/www \
+    && chmod -R 755 /var/www
 
 # Expose port 80
 EXPOSE 80
