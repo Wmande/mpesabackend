@@ -9,17 +9,32 @@ class Cors
 {
     public function handle(Request $request, Closure $next)
     {
-        $response = $next($request);
+        // Define allowed origins
+        $allowedOrigins = [
+            'http://localhost:3000', // For local development
+            'https://your-frontend-domain.com', // Replace with your actual frontend domain
+        ];
 
-        $response->headers->set('Access-Control-Allow-Origin', '*'); // Use your frontend URL in production
-        $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        $origin = $request->header('Origin') ?? '';
 
-        // Respond early to OPTIONS requests (CORS preflight)
-        if ($request->getMethod() === 'OPTIONS') {
-            return response()->json([], 200, $response->headers->all());
+        // Only set CORS headers for allowed origins
+        if (in_array($origin, $allowedOrigins)) {
+            $response = $next($request);
+
+            $response->headers->set('Access-Control-Allow-Origin', $origin);
+            $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+            $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+            $response->headers->set('Access-Control-Max-Age', '86400');
+
+            // Handle preflight OPTIONS requests
+            if ($request->isMethod('OPTIONS')) {
+                return response()->json([], 200, $response->headers->all());
+            }
+
+            return $response;
         }
 
-        return $response;
+        // Proceed without CORS headers for non-allowed origins
+        return $next($request);
     }
 }
