@@ -31,17 +31,12 @@ return [
 
     'connections' => [
 
-        'mongodb' => [
-        'driver' => 'mongodb',
-        'host' => env('MONGO_DB_HOST', '127.0.0.1'),
-        'port' => env('MONGO_DB_PORT', 27017),
-        'database' => env('MONGO_DB_DATABASE'),
-        'username' => env('MONGO_DB_USERNAME'),
-        'password' => env('MONGO_DB_PASSWORD'),
-        'options' => [
-            'database' => 'admin' // required for MongoDB authentication
-        ]
+       'mongodb' => [
+            'driver' => 'mongodb',
+            'dsn' => env('DB_DSN'),
+            'database' => env('DB_DATABASE'),
     ],
+
 
 
         'sqlite' => [
