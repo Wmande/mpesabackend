@@ -32,10 +32,16 @@ return [
     'connections' => [
 
         'mongodb' => [
-            'driver'   => 'mongodb',
-            'dsn' => env('MONGO_DB_URI', 'mongodb://127.0.0.1:27017/Mpesa'),
-            'database' => env('DB_DATABASE'),
-        ],
+        'driver' => 'mongodb',
+        'host' => env('MONGO_DB_HOST', '127.0.0.1'),
+        'port' => env('MONGO_DB_PORT', 27017),
+        'database' => env('MONGO_DB_DATABASE'),
+        'username' => env('MONGO_DB_USERNAME'),
+        'password' => env('MONGO_DB_PASSWORD'),
+        'options' => [
+            'database' => 'admin' // required for MongoDB authentication
+        ]
+    ],
 
 
         'sqlite' => [
@@ -47,7 +53,7 @@ return [
             'busy_timeout' => null,
             'journal_mode' => null,
             'synchronous' => null,
-        ],
+    ],
 
         'mysql' => [
             'driver' => 'mysql',

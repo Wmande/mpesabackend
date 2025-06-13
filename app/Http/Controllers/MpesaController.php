@@ -11,6 +11,7 @@ class MpesaController extends Controller
 {
     public function stkPush(Request $request)
     {
+        // Validate request input
         $request->validate([
             'phone' => ['required', 'string', 'regex:/^2547\d{8}$/'],
             'amount' => ['required', 'numeric', 'min:1']
@@ -20,11 +21,14 @@ class MpesaController extends Controller
         $amount = (int) $request->input('amount');
         $timestamp = now()->format('YmdHis');
 
+        // Load sensitive env values
         $shortcode = env('MPESA_SHORTCODE');
         $passkey = env('MPESA_PASSKEY');
         $callbackUrl = env('MPESA_CALLBACK_URL');
+        $consumerKey = env('MPESA_CONSUMER_KEY');
+        $consumerSecret = env('MPESA_CONSUMER_SECRET');
 
-        if (!$shortcode || !$passkey || !$callbackUrl) {
+        if (!$shortcode || !$passkey || !$callbackUrl || !$consumerKey || !$consumerSecret) {
             return response()->json([
                 'ResponseCode' => '1',
                 'errorMessage' => 'Server configuration error. Please contact support.'
@@ -34,10 +38,10 @@ class MpesaController extends Controller
         $password = base64_encode($shortcode . $passkey . $timestamp);
 
         try {
-            $authResponse = Http::withBasicAuth(
-                env('MPESA_CONSUMER_KEY'),
-                env('MPESA_CONSUMER_SECRET')
-            )->timeout(30)->get('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials');
+            // Step 1: Get Access Token
+            $authResponse = Http::withBasicAuth($consumerKey, $consumerSecret)
+                ->timeout(30)
+                ->get('https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials');
 
             if (!$authResponse->ok()) {
                 return response()->json([
@@ -48,24 +52,43 @@ class MpesaController extends Controller
 
             $access_token = $authResponse['access_token'];
 
-            $stkResponse = Http::withToken($access_token)->timeout(30)->post('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', [
-                'BusinessShortCode' => $shortcode,
-                'Password' => $password,
-                'Timestamp' => $timestamp,
-                'TransactionType' => 'CustomerPayBillOnline',
-                'Amount' => $amount,
-                'PartyA' => $phone,
-                'PartyB' => $shortcode,
-                'PhoneNumber' => $phone,
-                'CallBackURL' => $callbackUrl,
-                'AccountReference' => 'VIDENCE',
-                'TransactionDesc' => 'Payment'
-            ]);
+            // Step 2: Send STK Push
+            $stkResponse = Http::withToken($access_token)
+                ->withHeaders(['Content-Type' => 'application/json'])
+                ->timeout(30)
+                ->post('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', [
+                    'BusinessShortCode' => $shortcode,
+                    'Password' => $password,
+                    'Timestamp' => $timestamp,
+                    'TransactionType' => 'CustomerPayBillOnline',
+                    'Amount' => $amount,
+                    'PartyA' => $phone,
+                    'PartyB' => $shortcode,
+                    'PhoneNumber' => $phone,
+                    'CallBackURL' => $callbackUrl,
+                    'AccountReference' => 'VIDENCE',
+                    'TransactionDesc' => 'Payment'
+                ]);
 
             if ($stkResponse->successful()) {
                 $responseData = $stkResponse->json();
-                $responseData['ResponseCode'] = $responseData['ResponseCode'] ?? '0';
-                return response()->json($responseData, 200);
+
+                // Save STK request metadata
+                DB::connection('mongodb')->collection('stk_requests')->insert([
+                    'phone' => $phone,
+                    'amount' => $amount,
+                    'MerchantRequestID' => $responseData['MerchantRequestID'] ?? null,
+                    'CheckoutRequestID' => $responseData['CheckoutRequestID'] ?? null,
+                    'status' => 'pending',
+                    'requested_at' => now(),
+                ]);
+
+                return response()->json([
+                    'ResponseCode' => $responseData['ResponseCode'] ?? '0',
+                    'CustomerMessage' => $responseData['CustomerMessage'] ?? 'STK Push initiated.',
+                    'MerchantRequestID' => $responseData['MerchantRequestID'] ?? null,
+                    'CheckoutRequestID' => $responseData['CheckoutRequestID'] ?? null
+                ], 200);
             }
 
             return response()->json([
@@ -84,9 +107,7 @@ class MpesaController extends Controller
     public function callback(Request $request)
     {
         try {
-            $collection = DB::connection('mongodb')->collection('vidence');
-
-            $collection->insert([
+            DB::connection('mongodb')->collection('vidence')->insert([
                 'body' => $request->all(),
                 'received_at' => now()
             ]);
